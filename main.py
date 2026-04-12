@@ -1,5 +1,5 @@
 import pandas as pd
-datapath = './budapest_gtfs' #filepath of gtfs data folder here
+datapath = './budapest_gtfs' #provide filepath of gtfs data folder here
 
 
 routes = pd.read_csv(f'{datapath}/routes.txt', dtype={'route_id': str}).set_index('route_id')
