@@ -54,16 +54,24 @@ def get_timetable(stop_name, route_filter = None, hour_filter = None):
         'departure_time': 'Time', 
         'route_short_name': 'Route No', 
         'trip_headsign': 'Destination'
-        })
+        }) 
 
-# TODO: all the funcs below  
-
-def get_route_stops(route_short_name, direction_id=0):
+def get_route_stops(route_number, direction_id=0):
     '''
     Returns an ordered list of stops for a given route, sorted by stop_sequence.
     '''
-    pass
+    matched_route_id = routes[routes['route_short_name'] == str(route_number)].index
+    matched_trips = trips[(trips['route_id'].isin(matched_route_id)) & (trips['direction_id'] == direction_id)]
 
+    rep_trip = matched_trips.index[0]
+
+    route_stops = stop_times[stop_times['trip_id'] == rep_trip][['stop_id', 'stop_sequence']]
+    route_stops = route_stops.merge(stops[['stop_name']], left_on = 'stop_id', right_index = True)
+    route_stops = route_stops.sort_values('stop_sequence')
+
+    return (f'Stops for route number {route_number} on direction {direction_id}:'), route_stops[['stop_sequence', 'stop_name']].set_index('stop_sequence')
+
+# TODO: all the funcs below 
 def get_direct_connection(start_stop, end_stop):
     '''
     Returns a list of routes that provide a direct connection between two normalized stop names.
