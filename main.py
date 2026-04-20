@@ -112,12 +112,11 @@ def get_direct_connection(start_stop, end_stop, hour_filter = None):
         'trip_headsign': 'Destination'
     }).reset_index(drop=True)
 
-#TODO: all these by tuesday
-
 def get_transfer_connection(start_stop, end_stop, hour_filter=None):
     '''
     An upgrade to get_direct_connection that finds a path between two stops requiring exactly 
-    ONE transfer. Returns the suggested transfer station and both route numbers.
+    ONE transfer. Returns the suggested transfer station, and recommended routes to take.
+    e.g. get_transfer_connection('harminckettesek tere', 'vigado ter', 16)
     '''
     start_stopid = stops[stops['stop_name_normal'] == start_stop].index
     end_stopid = stops[stops['stop_name_normal'] == end_stop].index
@@ -138,29 +137,35 @@ def get_transfer_connection(start_stop, end_stop, hour_filter=None):
     second_leg = st_end.merge(stop_times[['stop_id', 'trip_id', 'stop_sequence']], on = 'trip_id', suffixes=('_end', '_second_leg'))
     second_leg = second_leg[second_leg['stop_sequence_end'] > second_leg['stop_sequence_second_leg']]
 
-    # Map stop IDs to their normalized names to allow transfers within the same station complex
+    #map stop IDs to their normalized names to allow transfers within the same station complex
     first_leg['transfer_match_name'] = first_leg['stop_id_first_leg'].map(stops['stop_name_normal'])
     second_leg['transfer_match_name'] = second_leg['stop_id_second_leg'].map(stops['stop_name_normal'])
 
-    # Merge for common transfer points using the normalized station name
-    transfer_points = first_leg.merge(second_leg[['trip_id', 'transfer_match_name']], on='transfer_match_name', suffixes=('_leg1', '_leg2'))
-    
+    #mapping route_id and headsign info early and dropping duplicates
+    first_leg['route_id1'] = first_leg['trip_id'].map(trips['route_id'])
+    first_leg['headsign1'] = first_leg['trip_id'].map(trips['trip_headsign'])
+    second_leg['route_id2'] = second_leg['trip_id'].map(trips['route_id'])
+    second_leg['headsign2'] = second_leg['trip_id'].map(trips['trip_headsign'])
+
+    first_leg_unique = first_leg[['route_id1', 'headsign1', 'transfer_match_name', 'stop_id_first_leg']].drop_duplicates()
+    second_leg_unique = second_leg[['route_id2', 'headsign2', 'transfer_match_name']].drop_duplicates()
+
+    #merge for common transfer points
+    transfer_points = first_leg_unique.merge(second_leg_unique, on='transfer_match_name')
+        
     if transfer_points.empty:
         return f'No single-transfer routes between {start_stop} and {end_stop} :('
     
-    unique_transfers = transfer_points[['trip_id_leg1', 'trip_id_leg2', 'stop_id_first_leg']].drop_duplicates()
-
-    unique_transfers['route_id1'] = unique_transfers['trip_id_leg1'].map(trips['route_id'])
-    unique_transfers['route_id2'] = unique_transfers['trip_id_leg2'].map(trips['route_id'])
-
-    valid_transfers = unique_transfers[unique_transfers['route_id1'] != unique_transfers['route_id2']].copy()
+    valid_transfers = transfer_points[transfer_points['route_id1'] != transfer_points['route_id2']].copy()
     if valid_transfers.empty:
-        return f'A direct connection exists for this stop pairing, attempting to find:', get_direct_connection(start_stop, end_stop)
+        return f'A direct connection exists for this stop pairing:', get_direct_connection(start_stop, end_stop)
     valid_transfers['First Route'] = valid_transfers['route_id1'].map(routes['route_short_name'])
+    valid_transfers['First Route Destination'] = valid_transfers['headsign1']
     valid_transfers['Transfer Station'] = valid_transfers['stop_id_first_leg'].map(stops['stop_name'])
     valid_transfers['Second Route'] = valid_transfers['route_id2'].map(routes['route_short_name'])
+    valid_transfers['Second Route Destination'] = valid_transfers['headsign2']
 
-    final_results = valid_transfers[['First Route', 'Transfer Station', 'Second Route']].drop_duplicates()
+    final_results = valid_transfers[['First Route', 'First Route Destination', 'Transfer Station', 'Second Route', 'Second Route Destination']].drop_duplicates()
 
     return final_results
 
