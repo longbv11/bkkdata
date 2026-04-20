@@ -98,7 +98,7 @@ def get_direct_connection(start_stop, end_stop, hour_filter = None):
     valid_trip = common_trip[common_trip['stop_sequence_start'] < common_trip['stop_sequence_end']]
 
     if valid_trip.empty:
-        return (f'No direct connection between {start_stop} and {end_stop}, please contact BKK to request the creation of such a route')
+        return (f'No direct connection between {start_stop} and {end_stop}, attempting to find one-transfer connections:'), get_transfer_connection(start_stop, end_stop)
     
     valid_trips_info = trips.loc[valid_trip['trip_id'].unique(), ['route_id', 'trip_headsign']].drop_duplicates()
     result = valid_trips_info.merge(routes[['route_short_name', 'route_type']], left_on='route_id', right_index=True)
@@ -114,6 +114,57 @@ def get_direct_connection(start_stop, end_stop, hour_filter = None):
 
 #TODO: all these by tuesday
 
+def get_transfer_connection(start_stop, end_stop, hour_filter=None):
+    '''
+    An upgrade to get_direct_connection that finds a path between two stops requiring exactly 
+    ONE transfer. Returns the suggested transfer station and both route numbers.
+    '''
+    start_stopid = stops[stops['stop_name_normal'] == start_stop].index
+    end_stopid = stops[stops['stop_name_normal'] == end_stop].index
+
+    #finds all stopping events that serves the start and end
+    st_start = stop_times[stop_times['stop_id'].isin(start_stopid)][['trip_id', 'stop_sequence', 'stop_id', 'departure_time']]
+    if hour_filter is not None:
+        hour_str = str(hour_filter).zfill(2)
+        st_start = st_start[st_start['departure_time'].str.startswith(f"{hour_str}:")]
+        
+    st_start = st_start[['trip_id', 'stop_sequence', 'stop_id']]
+    st_end = stop_times[stop_times['stop_id'].isin(end_stopid)][['trip_id', 'stop_sequence', 'stop_id']]
+
+    #finds all potential transfer points
+    first_leg = st_start.merge(stop_times[['trip_id', 'stop_id', 'stop_sequence']], on= 'trip_id', suffixes=('_start', '_first_leg'))
+    first_leg = first_leg[first_leg['stop_sequence_start'] < first_leg['stop_sequence_first_leg']]
+
+    second_leg = st_end.merge(stop_times[['stop_id', 'trip_id', 'stop_sequence']], on = 'trip_id', suffixes=('_end', '_second_leg'))
+    second_leg = second_leg[second_leg['stop_sequence_end'] > second_leg['stop_sequence_second_leg']]
+
+    # Map stop IDs to their normalized names to allow transfers within the same station complex
+    first_leg['transfer_match_name'] = first_leg['stop_id_first_leg'].map(stops['stop_name_normal'])
+    second_leg['transfer_match_name'] = second_leg['stop_id_second_leg'].map(stops['stop_name_normal'])
+
+    # Merge for common transfer points using the normalized station name
+    transfer_points = first_leg.merge(second_leg[['trip_id', 'transfer_match_name']], on='transfer_match_name', suffixes=('_leg1', '_leg2'))
+    
+    if transfer_points.empty:
+        return f'No single-transfer routes between {start_stop} and {end_stop} :('
+    
+    unique_transfers = transfer_points[['trip_id_leg1', 'trip_id_leg2', 'stop_id_first_leg']].drop_duplicates()
+
+    unique_transfers['route_id1'] = unique_transfers['trip_id_leg1'].map(trips['route_id'])
+    unique_transfers['route_id2'] = unique_transfers['trip_id_leg2'].map(trips['route_id'])
+
+    valid_transfers = unique_transfers[unique_transfers['route_id1'] != unique_transfers['route_id2']].copy()
+    if valid_transfers.empty:
+        return f'A direct connection exists for this stop pairing, attempting to find:', get_direct_connection(start_stop, end_stop)
+    valid_transfers['First Route'] = valid_transfers['route_id1'].map(routes['route_short_name'])
+    valid_transfers['Transfer Station'] = valid_transfers['stop_id_first_leg'].map(stops['stop_name'])
+    valid_transfers['Second Route'] = valid_transfers['route_id2'].map(routes['route_short_name'])
+
+    final_results = valid_transfers[['First Route', 'Transfer Station', 'Second Route']].drop_duplicates()
+
+    return final_results
+
+
 def get_route_frequency(route_number, stop_name, start_hour=7, end_hour=9):
     '''
     Calculates the average headway (time between departures) in minutes for a specific route 
@@ -128,12 +179,6 @@ def get_busiest_stops(top_n=10):
     '''
     pass
 
-def get_transfer_connection(start_stop, end_stop):
-    '''
-    An upgrade to get_direct_connection that finds a path between two stops requiring exactly 
-    ONE transfer. Returns the suggested transfer station and both route numbers.
-    '''
-    pass
 
 def get_service_span(route_number, direction_id=0):
     '''

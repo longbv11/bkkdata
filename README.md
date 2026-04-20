@@ -12,4 +12,5 @@ This is a work in progress.
 - `get_modes(stop_name, hour_filter=None)`: Returns the modes that serve a stop, for a given normalized name.
 - `get_timetable(stop_name, route_filter=None, hour_filter=None)`: Returns a schedule of departure times and routes, for a given normalized stop name.
 - `get_route_stops(route_number, direction_id=0)`: Returns an ordered list of stops for a given route, sorted by stop_sequence.
-- `get_direct_connection(start_stop, end_stop, hour_filter=None)`: Returns a list of routes that provide a direct connection between two normalized stop names.
+- `get_direct_connection(start_stop, end_stop, hour_filter=None)`: Returns a list of routes that provide a direct connection between two stops.
+- `get_transfer_connection(start_stop, end_stop, hour_filter=None)`: Returns a possible routing between two stops that have no direct connection and require ONE transfer
