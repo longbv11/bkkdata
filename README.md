@@ -1,4 +1,4 @@
-# BKKData, an entry-level data science personal project
+# BKKData, a data science personal project
 
 ### Introduction
 
@@ -9,8 +9,16 @@ Theoretically the program should work with any properly formatted GTFS-Static fi
 This is a work in progress.
 
 ### Current functionality:
+
 - `get_modes(stop_name, hour_filter=None)`: Returns the modes that serve a stop, for a given stop name.
 - `get_timetable(stop_name, route_filter=None, hour_filter=None)`: Returns a schedule of departure times and routes, for a given stop name.
-- `get_route_stops(route_number, direction_id=0)`: Returns an ordered list of stops for a given route, sorted by stop_sequence.
-- `get_direct_connection(start_stop, end_stop, hour_filter=None)`: Returns a list of routes that provide a direct connection between two normalized stop names.
+- `get_route_stops(route_number, direction_id=0)`: Returns an ordered list of stops for a given route, sorted by stop sequence.
+- `get_direct_connection(start_stop, end_stop, hour_filter=None)`: Returns a list of routes that provide a direct connection between two stops.
 - `get_transfer_connection(start_stop, end_stop, hour_filter=None)`: Returns a possible routing between two stops that have no direct connection and require ONE transfer
+
+### Notes on usage:
+
+- Bring-your-own-GTFS-database (as stated above); this program has not been tested with other databases however
+- The program takes NORMALIZED stop names as arguments (e.g. "Deák Ferenc tér" should be inputted as "deak ferenc ter")
+
+### Have fun!

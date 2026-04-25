@@ -175,7 +175,11 @@ def get_route_frequency(route_number, stop_name, start_hour=7, end_hour=9):
     Calculates the average headway (time between departures) in minutes for a specific route 
     at a given stop during a specified time window (e.g., morning peak hours).
     '''
-    pass
+    matched_route_id = routes[routes['route_short_name'] == str(route_number)].index
+    matched_stop_id = stops[stops['stop_name_normal'] == stop_name].index
+
+    
+
 
 def get_busiest_stops(top_n=10):
     '''
