@@ -125,7 +125,7 @@ def get_transfer_connection(start_stop, end_stop, hour_filter=None):
     st_start = stop_times[stop_times['stop_id'].isin(start_stopid)][['trip_id', 'stop_sequence', 'stop_id', 'departure_time']]
     if hour_filter is not None:
         hour_str = str(hour_filter).zfill(2)
-        st_start = st_start[st_start['departure_time'].str.startswith(f"{hour_str}:")]
+        st_start = st_start[st_start['departure_time'].str.startswith(f"{hour_str}:")] 
         
     st_start = st_start[['trip_id', 'stop_sequence', 'stop_id']]
     st_end = stop_times[stop_times['stop_id'].isin(end_stopid)][['trip_id', 'stop_sequence', 'stop_id']]
@@ -170,7 +170,7 @@ def get_transfer_connection(start_stop, end_stop, hour_filter=None):
     return final_results
 
 
-def get_route_frequency(route_number, stop_name, start_hour=7, end_hour=9):
+def get_route_frequency(route_number, stop_name, start_hour, end_hour):
     '''
     Calculates the average headway (time between departures) in minutes for a specific route 
     at a given stop during a specified time window (e.g., morning peak hours).
@@ -178,8 +178,39 @@ def get_route_frequency(route_number, stop_name, start_hour=7, end_hour=9):
     matched_route_id = routes[routes['route_short_name'] == str(route_number)].index
     matched_stop_id = stops[stops['stop_name_normal'] == stop_name].index
 
+    # 2. Filter the Schedule
+    route_trips = trips[trips['route_id'].isin(matched_route_id)]
+    st = stop_times[(stop_times['stop_id'].isin(matched_stop_id)) & (stop_times['trip_id'].isin(route_trips.index))]
     
+    if st.empty:
+        return f"Route {route_number} does not serve stop '{stop_name}'."
 
+    # 3. Group by direction w headsign
+    st = st.merge(route_trips[['trip_headsign']], left_on='trip_id', right_index=True)
+
+    # 4. Time conversion to seconds past midnight and filtering
+    def to_seconds(time_str):
+        h, m, s = map(int, str(time_str).split(':'))
+        return h * 3600 + m * 60 + s
+        
+    st['departure_sec'] = st['departure_time'].apply(to_seconds)
+    
+    start_sec = start_hour * 3600
+    end_sec = end_hour * 3600
+    st = st[(st['departure_sec'] >= start_sec) & (st['departure_sec'] < end_sec)]
+    
+    if st.empty:
+        return f"No service for route {route_number} at '{stop_name}' between {start_hour}:00 and {end_hour}:00."
+
+    # 5. headways
+    st = st.sort_values(['trip_headsign', 'departure_sec'])
+    st['headway_sec'] = st.groupby('trip_headsign')['departure_sec'].diff()
+
+    # 6. Average and output
+    avg_headways = (st.groupby('trip_headsign')['headway_sec'].mean() / 60).round(1).reset_index()
+    avg_headways.columns = ['Destination', 'Avg Wait Time (min)']
+    
+    return avg_headways
 
 def get_busiest_stops(top_n=10):
     '''
